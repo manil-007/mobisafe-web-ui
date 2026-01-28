@@ -47,13 +47,34 @@ const SocketController = () => {
     })));
   }, [features, dispatch, soundEvents, soundAlarms]);
 
-  const connectSocket = () => {
-    const url = 'https://api.driversaathi.com';
-    const socket = new WebSocket('ws' + url.substring(4) + '/api/socket');
+  const connectSocket = async () => {
+    let token = '';
+    try {
+      const expiration = new Date();
+      expiration.setMonth(expiration.getMonth() + 6);
+      const response = await fetch('/api/session/token', {
+        method: 'POST',
+        body: new URLSearchParams(`expiration=${expiration.toISOString()}`),
+      });
+      if (response.ok) {
+        token = await response.text();
+        // console.log('Successfully fetched session token');
+      } else {
+        console.warn('Failed to fetch session token:', response.status);
+      }
+    } catch (e) {
+      console.error('Error fetching session token:', e);
+    }
+
+    // const url = 'http://192.168.1.17:8082';
+    const url = "https://api.driversaathi.com"
+    const socketUrl = 'ws' + url.substring(4) + '/api/socket' + (token ? `?token=${token}` : '');
+    // console.log('Connecting to WebSocket:', socketUrl);
+    const socket = new WebSocket(socketUrl);
     socketRef.current = socket;
 
     socket.onopen = () => {
-      console.log('WebSocket connected');
+      // console.log('WebSocket connected');
       dispatch(sessionActions.updateSocket(true));
     };
 
@@ -104,6 +125,22 @@ const SocketController = () => {
   useEffect(() => {
     socketRef.current?.send(JSON.stringify({ logs: includeLogs }));
   }, [includeLogs]);
+
+  // useEffect(() => {
+  //   let interval;
+  //   if (authenticated) {
+  //     interval = setInterval(() => {
+  //       if (socketRef.current?.readyState === WebSocket.OPEN) {
+  //         socketRef.current.send(JSON.stringify({ test: true }));
+  //       }
+  //     }, 2000);
+  //   }
+  //   return () => {
+  //     if (interval) {
+  //       clearInterval(interval);
+  //     }
+  //   };
+  // }, [authenticated]);
 
   useEffectAsync(async () => {
     if (authenticated) {

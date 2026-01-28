@@ -9,7 +9,11 @@ export default defineConfig(({ mode }) => ({
     port: 3000,
     proxy: mode === 'development'
       ? {
-        '/api': 'https://api.driversaathi.com', // only used when running npm start
+        '/api': {
+          target: 'https://api.driversaathi.com',
+          changeOrigin: true,
+          ws: true,
+        },
       }
       : undefined,
   },

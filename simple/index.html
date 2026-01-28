@@ -103,20 +103,46 @@
       const [positions, setPositions] = React.useState({});
 
       React.useEffect(() => {
-        if (initialized) {
-          // const url = window.location.protocol + '//' + window.location.host;
-          const url = 'https://api.driversaathi.com';
-          const socket = new WebSocket('ws' + url.substring(4) + '/api/socket');
-          socket.onopen = () => console.log('WebSocket connected to ' + socket.url);
-          socket.onclose = () => console.log('WebSocket closed');
+        const connectSocket = async () => {
+          if (!initialized) return;
+
+          let token = '';
+          try {
+            const expiration = new Date();
+            expiration.setMonth(expiration.getMonth() + 6);
+            const response = await fetch('/api/session/token', {
+              method: 'POST',
+              body: new URLSearchParams(`expiration=${expiration.toISOString()}`),
+            });
+            if (response.ok) {
+              token = await response.text();
+              console.log('Successfully fetched session token');
+            }
+          } catch (e) {
+            console.error('Token fetch failed', e);
+          }
+
+          // const url = 'http://192.168.1.17:8082';
+          const url = "https://api.driversaathi.com"
+          const socketUrl = 'ws' + url.substring(4) + '/api/socket' + (token ? `?token=${token}` : '');
+          console.log('Connecting to:', socketUrl);
+
+          const socket = new WebSocket(socketUrl);
+          socket.onopen = () => console.log('WebSocket connected');
+          socket.onclose = (e) => console.log('WebSocket closed', e.code);
           socket.onerror = (error) => console.error('WebSocket error', error);
           socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
             const updatedPositions = {};
             data.positions?.forEach((p) => updatedPositions[p.deviceId] = p);
-            setPositions({ ...positions, ...updatedPositions })
+            setPositions((prev) => ({ ...prev, ...updatedPositions }));
           };
-        }
+          return () => socket.close();
+        };
+
+        let cleanup;
+        connectSocket().then(cancel => cleanup = cancel);
+        return () => cleanup && cleanup();
       }, [initialized]);
 
       const handleAddDevice = (event) => {
