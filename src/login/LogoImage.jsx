@@ -29,7 +29,10 @@ const LogoImage = ({ color }) => {
     }
     return <img className={classes.image} src={logo} alt="" />;
   }
-  return <Logo className={classes.image} style={{ color }} />;
+  // return <Logo className={classes.image} style={{ color }} />;
+  return <h1 style={{
+    fontSize: "40px"
+  }}>Mobisafe</h1>;
 };
 
 export default LogoImage;
