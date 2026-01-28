@@ -37,7 +37,7 @@ const SocketController = () => {
       dispatch(eventsActions.add(events));
     }
     if (events.some((e) => soundEvents.includes(e.type)
-        || (e.type === 'alarm' && soundAlarms.includes(e.attributes.alarm)))) {
+      || (e.type === 'alarm' && soundAlarms.includes(e.attributes.alarm)))) {
       new Audio(alarm).play();
     }
     setNotifications(events.map((event) => ({
@@ -48,15 +48,17 @@ const SocketController = () => {
   }, [features, dispatch, soundEvents, soundAlarms]);
 
   const connectSocket = () => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${protocol}//${window.location.host}/api/socket`);
+    const url = 'https://api.driversaathi.com';
+    const socket = new WebSocket('ws' + url.substring(4) + '/api/socket');
     socketRef.current = socket;
 
     socket.onopen = () => {
+      console.log('WebSocket connected');
       dispatch(sessionActions.updateSocket(true));
     };
 
     socket.onclose = async (event) => {
+      console.log('WebSocket closed', event.code);
       dispatch(sessionActions.updateSocket(false));
       if (event.code !== logoutCode) {
         try {
@@ -76,6 +78,10 @@ const SocketController = () => {
         }
         setTimeout(connectSocket, 60000);
       }
+    };
+
+    socket.onerror = (error) => {
+      console.error('WebSocket error', error);
     };
 
     socket.onmessage = (event) => {

@@ -4,13 +4,13 @@ import svgr from 'vite-plugin-svgr';
 import { VitePWA } from 'vite-plugin-pwa';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
-export default defineConfig(({mode}) => ({
+export default defineConfig(({ mode }) => ({
   server: {
     port: 3000,
     proxy: mode === 'development'
       ? {
-          '/api': 'http://localhost:8082', // only used when running npm start
-        }
+        '/api': 'https://api.driversaathi.com', // only used when running npm start
+      }
       : undefined,
   },
   build: {
