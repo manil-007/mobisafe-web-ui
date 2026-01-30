@@ -176,48 +176,48 @@ const EventReportPage = () => {
             {position && <MapCamera latitude={position.latitude} longitude={position.longitude} />}
           </div>
         )}
-        <div className={classes.containerMain}>
-          <div className={classes.header}>
-            <ReportFilter onShow={onShow} onExport={onExport} onSchedule={onSchedule} deviceType="multiple" loading={loading}>
+        <div className={classes.header}>
+          <ReportFilter onShow={onShow} onExport={onExport} onSchedule={onSchedule} deviceType="multiple" loading={loading}>
+            <div className={classes.filterItem}>
+              <FormControl fullWidth>
+                <InputLabel>{t('reportEventTypes')}</InputLabel>
+                <Select
+                  label={t('reportEventTypes')}
+                  value={eventTypes}
+                  onChange={(e, child) => {
+                    let values = e.target.value;
+                    const clicked = child.props.value;
+                    if (values.includes('allEvents') && values.length > 1) {
+                      values = [clicked];
+                    }
+                    updateReportParams(searchParams, setSearchParams, 'eventType', values)
+                  }}
+                  multiple
+                >
+                  {allEventTypes.map(([key, string]) => (
+                    <MenuItem key={key} value={key}>{t(string)}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </div>
+            {eventTypes[0] !== 'allEvents' && eventTypes.includes('alarm') && (
               <div className={classes.filterItem}>
-                <FormControl fullWidth>
-                  <InputLabel>{t('reportEventTypes')}</InputLabel>
-                  <Select
-                    label={t('reportEventTypes')}
-                    value={eventTypes}
-                    onChange={(e, child) => {
-                      let values = e.target.value;
-                      const clicked = child.props.value;
-                      if (values.includes('allEvents') && values.length > 1) {
-                        values = [clicked];
-                      }
-                      updateReportParams(searchParams, setSearchParams, 'eventType', values)
-                    }}
-                    multiple
-                  >
-                    {allEventTypes.map(([key, string]) => (
-                      <MenuItem key={key} value={key}>{t(string)}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <SelectField
+                  multiple
+                  value={alarmTypes}
+                  onChange={(e) => updateReportParams(searchParams, setSearchParams, 'alarmType', e.target.value)}
+                  data={alarms}
+                  keyGetter={(it) => it.key}
+                  label={t('sharedAlarms')}
+                  fullWidth
+                />
               </div>
-              {eventTypes[0] !== 'allEvents' && eventTypes.includes('alarm') && (
-                <div className={classes.filterItem}>
-                  <SelectField
-                    multiple
-                    value={alarmTypes}
-                    onChange={(e) => updateReportParams(searchParams, setSearchParams, 'alarmType', e.target.value)}
-                    data={alarms}
-                    keyGetter={(it) => it.key}
-                    label={t('sharedAlarms')}
-                    fullWidth
-                  />
-                </div>
-              )}
-              <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
-            </ReportFilter>
-          </div>
-          <Table>
+            )}
+            <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
+          </ReportFilter>
+        </div>
+        <div className={classes.containerMain}>
+          <Table stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell className={classes.columnAction} />

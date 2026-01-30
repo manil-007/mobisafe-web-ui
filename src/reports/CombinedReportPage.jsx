@@ -73,11 +73,11 @@ const CombinedReportPage = () => {
             <MapCamera coordinates={itemsCoordinates} />
           </div>
         )}
+        <div className={classes.header}>
+          <ReportFilter onShow={onShow} deviceType="multiple" loading={loading} />
+        </div>
         <div className={classes.containerMain}>
-          <div className={classes.header}>
-            <ReportFilter onShow={onShow} deviceType="multiple" loading={loading} />
-          </div>
-          <Table>
+          <Table stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell>{t('sharedDevice')}</TableCell>

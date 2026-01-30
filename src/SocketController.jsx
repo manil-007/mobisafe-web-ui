@@ -74,7 +74,6 @@ const SocketController = () => {
     socketRef.current = socket;
 
     socket.onopen = () => {
-      // console.log('WebSocket connected');
       dispatch(sessionActions.updateSocket(true));
     };
 

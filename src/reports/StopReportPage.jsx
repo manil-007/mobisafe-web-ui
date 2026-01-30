@@ -127,13 +127,13 @@ const StopReportPage = () => {
             <MapCamera latitude={selectedItem.latitude} longitude={selectedItem.longitude} />
           </div>
         )}
+        <div className={classes.header}>
+          <ReportFilter onShow={onShow} onExport={onExport} onSchedule={onSchedule} deviceType="multiple" loading={loading}>
+            <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
+          </ReportFilter>
+        </div>
         <div className={classes.containerMain}>
-          <div className={classes.header}>
-            <ReportFilter onShow={onShow} onExport={onExport} onSchedule={onSchedule} deviceType="multiple" loading={loading}>
-              <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
-            </ReportFilter>
-          </div>
-          <Table>
+          <Table stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell className={classes.columnAction} />
