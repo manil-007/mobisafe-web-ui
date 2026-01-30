@@ -126,26 +126,28 @@ const SummaryReportPage = () => {
           <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
         </ReportFilter>
       </div>
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('sharedDevice')}</TableCell>
-            {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {!loading ? items.map((item) => (
-            <TableRow key={(`${item.deviceId}_${Date.parse(item.startTime)}`)}>
-              <TableCell>{devices[item.deviceId].name}</TableCell>
-              {columns.map((key) => (
-                <TableCell key={key}>
-                  {formatValue(item, key)}
-                </TableCell>
-              ))}
+      <div className={classes.containerMain}>
+        <Table stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell>{t('sharedDevice')}</TableCell>
+              {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
             </TableRow>
-          )) : (<TableShimmer columns={columns.length + 1} />)}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {!loading ? items.map((item) => (
+              <TableRow key={(`${item.deviceId}_${Date.parse(item.startTime)}`)}>
+                <TableCell>{devices[item.deviceId].name}</TableCell>
+                {columns.map((key) => (
+                  <TableCell key={key}>
+                    {formatValue(item, key)}
+                  </TableCell>
+                ))}
+              </TableRow>
+            )) : (<TableShimmer columns={columns.length + 1} />)}
+          </TableBody>
+        </Table>
+      </div>
     </PageLayout>
   );
 };

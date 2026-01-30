@@ -12,6 +12,7 @@ export default makeStyles()((theme) => ({
   },
   containerMain: {
     overflow: 'auto',
+    flexGrow: 1,
   },
   header: {
     position: 'sticky',

@@ -129,31 +129,31 @@ const PositionsReportPage = () => {
             <MapCamera positions={items} />
           </div>
         )}
-        <div className={classes.containerMain}>
-          <div className={classes.header}>
-            <ReportFilter onShow={onShow} onExport={onExport} onSchedule={onSchedule} deviceType="single" loading={loading}>
-              <div className={classes.filterItem}>
-                <SelectField
-                  value={geofenceId}
-                  onChange={(e) => {
-                    const values = e.target.value ? [e.target.value] : [];
-                    updateReportParams(searchParams, setSearchParams, 'geofenceId', values);
-                  }}
-                  endpoint="/api/geofences"
-                  label={t('sharedGeofence')}
-                  fullWidth
-                />
-              </div>
-              <ColumnSelect
-                columns={columns}
-                setColumns={setColumns}
-                columnsArray={available}
-                rawValues
-                disabled={!items.length}
+        <div className={classes.header}>
+          <ReportFilter onShow={onShow} onExport={onExport} onSchedule={onSchedule} deviceType="single" loading={loading}>
+            <div className={classes.filterItem}>
+              <SelectField
+                value={geofenceId}
+                onChange={(e) => {
+                  const values = e.target.value ? [e.target.value] : [];
+                  updateReportParams(searchParams, setSearchParams, 'geofenceId', values);
+                }}
+                endpoint="/api/geofences"
+                label={t('sharedGeofence')}
+                fullWidth
               />
-            </ReportFilter>
-          </div>
-          <Table>
+            </div>
+            <ColumnSelect
+              columns={columns}
+              setColumns={setColumns}
+              columnsArray={available}
+              rawValues
+              disabled={!items.length}
+            />
+          </ReportFilter>
+        </div>
+        <div className={classes.containerMain}>
+          <Table stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell className={classes.columnAction} />
