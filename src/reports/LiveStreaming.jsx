@@ -17,11 +17,11 @@ const useStyles = makeStyles()(() => ({
     root: {
         '--primary': '#6366f1',
         '--primary-hover': '#4f46e5',
-        '--bg': '#0f172a',
-        '--card-bg': 'rgba(30, 41, 59, 0.7)',
-        '--border': 'rgba(255, 255, 255, 0.1)',
-        '--text': '#f8fafc',
-        '--text-muted': '#94a3b8',
+        '--bg': '#ffffff',
+        '--card-bg': '#f8fafc',
+        '--border': '#e2e8f0',
+        '--text': '#0f172a',
+        '--text-muted': '#64748b',
         '--success': '#10b981',
         '--danger': '#ef4444',
         backgroundColor: 'var(--bg)',
@@ -44,7 +44,7 @@ const useStyles = makeStyles()(() => ({
     },
     header: {
         padding: '1.5rem 2rem',
-        background: 'rgba(15, 23, 42, 0.8)',
+        background: 'rgba(255, 255, 255, 0.8)',
         backdropFilter: 'blur(10px)',
         borderBottom: '1px solid var(--border)',
         position: 'sticky',
@@ -91,7 +91,7 @@ const useStyles = makeStyles()(() => ({
         '&:hover': {
             borderColor: 'var(--primary)',
             transform: 'translateY(-2px)',
-            background: 'rgba(30, 41, 59, 0.9)',
+            background: '#f1f5f9',
         },
         '&.active': {
             borderColor: 'var(--primary)',
@@ -135,7 +135,7 @@ const useStyles = makeStyles()(() => ({
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'rgba(15, 23, 42, 0.5)',
+        background: '#f1f5f9',
         borderBottom: '1px solid var(--border)',
         zIndex: 10,
     },
@@ -184,7 +184,7 @@ const useStyles = makeStyles()(() => ({
         color: 'var(--text-muted)',
         gap: '1rem',
         zIndex: 5,
-        background: 'rgba(15, 23, 42, 0.8)',
+        background: 'rgba(255, 255, 255, 0.8)',
     },
     badge: {
         background: 'rgba(99, 102, 241, 0.2)',
@@ -203,7 +203,7 @@ const useStyles = makeStyles()(() => ({
         zIndex: 1000,
     },
     toast: {
-        background: 'rgba(30, 41, 59, 0.9)',
+        background: 'rgba(255, 255, 255, 0.9)',
         border: '1px solid var(--border)',
         padding: '1rem 1.5rem',
         borderRadius: '0.75rem',
@@ -391,8 +391,33 @@ const LiveStreaming = () => {
                                     onClick={(e) => e.stopPropagation()}
                                     onChange={() => handleToggle(id)}
                                     sx={{
-                                        '& .MuiSwitch-switchBase.Mui-checked': { color: 'var(--primary)' },
-                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: 'var(--primary)' },
+                                        width: 42,
+                                        height: 26,
+                                        padding: 0,
+                                        '& .MuiSwitch-switchBase': {
+                                            padding: 0,
+                                            margin: 2,
+                                            transitionDuration: '300ms',
+                                            '&.Mui-checked': {
+                                                transform: 'translateX(16px)',
+                                                color: '#fff',
+                                                '& + .MuiSwitch-track': {
+                                                    backgroundColor: 'var(--primary)',
+                                                    opacity: 1,
+                                                    border: 0,
+                                                },
+                                            },
+                                        },
+                                        '& .MuiSwitch-thumb': {
+                                            boxSizing: 'border-box',
+                                            width: 22,
+                                            height: 22,
+                                        },
+                                        '& .MuiSwitch-track': {
+                                            borderRadius: 26 / 2,
+                                            backgroundColor: '#E9E9EA',
+                                            opacity: 1,
+                                        },
                                     }}
                                 />
                             </Box>
