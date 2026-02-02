@@ -33,6 +33,7 @@ import MaintenancePage from './settings/MaintenancePage';
 import CommandsPage from './settings/CommandsPage';
 import CommandPage from './settings/CommandPage';
 import StatisticsPage from './reports/StatisticsPage';
+import LiveStreaming from './reports/LiveStreaming';
 import LoginPage from './login/LoginPage';
 import RegisterPage from './login/RegisterPage';
 import ResetPasswordPage from './login/ResetPasswordPage';
@@ -180,6 +181,7 @@ const Navigation = () => {
           <Route path="statistics" element={<StatisticsPage />} />
           <Route path="audit" element={<AuditPage />} />
           <Route path="logs" element={<LogsPage />} />
+          <Route path="live" element={<LiveStreaming />} />
         </Route>
       </Route>
     </Routes>

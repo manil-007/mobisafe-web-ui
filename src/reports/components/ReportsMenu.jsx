@@ -11,6 +11,7 @@ import RouteIcon from '@mui/icons-material/Route';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import NotesIcon from '@mui/icons-material/Notes';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import VideocamIcon from '@mui/icons-material/Videocam';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../../common/components/LocalizationProvider';
 import { useAdministrator, useRestriction } from '../../common/util/permissions';
@@ -106,6 +107,12 @@ const ReportsMenu = () => {
             selected={location.pathname === '/reports/audit'}
           />
         )}
+        <MenuItem
+          title="Live Streaming"
+          link="/reports/live"
+          icon={<VideocamIcon />}
+          selected={location.pathname === '/reports/live'}
+        />
       </List>
     </>
   );
