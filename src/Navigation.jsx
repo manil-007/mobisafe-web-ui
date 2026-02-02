@@ -182,6 +182,7 @@ const Navigation = () => {
           <Route path="audit" element={<AuditPage />} />
           <Route path="logs" element={<LogsPage />} />
           <Route path="live" element={<LiveStreaming />} />
+          <Route path="live/:deviceId" element={<LiveStreaming />} />
         </Route>
       </Route>
     </Routes>

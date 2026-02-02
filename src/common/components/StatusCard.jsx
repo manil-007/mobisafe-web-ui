@@ -26,6 +26,7 @@ import PublishIcon from '@mui/icons-material/Publish';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PendingIcon from '@mui/icons-material/Pending';
+import VideocamIcon from '@mui/icons-material/Videocam';
 
 import { useTranslation } from './LocalizationProvider';
 import RemoveDialog from './RemoveDialog';
@@ -116,7 +117,7 @@ const StatusRow = ({ name, content }) => {
   );
 };
 
-const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPadding = 0 }) => {
+const StatusCard = ({ deviceId, position, onClose, onStreaming, disableActions, desktopPadding = 0 }) => {
   const { classes } = useStyles({ desktopPadding });
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -255,6 +256,16 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                     <ReplayIcon />
                   </IconButton>
                 </Tooltip>
+                {device.model === 'JT808' && (
+                  <Tooltip title="Live Streaming">
+                    <IconButton
+                      onClick={() => navigate(`/reports/live/${deviceId}`)}
+                      disabled={disableActions || !position || device.status === 'unknown'}
+                    >
+                      <VideocamIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
                 <Tooltip title={t('commandTitle')}>
                   <IconButton
                     onClick={() => navigate(`/settings/device/${deviceId}/command`)}

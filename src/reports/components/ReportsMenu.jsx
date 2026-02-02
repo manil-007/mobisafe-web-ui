@@ -74,6 +74,12 @@ const ReportsMenu = () => {
           icon={<TimelineIcon />}
           selected={location.pathname === '/reports/route'}
         />
+        <MenuItem
+          title="Live Streaming"
+          link="/reports/live"
+          icon={<VideocamIcon />}
+          selected={location.pathname === '/reports/live'}
+        />
       </List>
       <Divider />
       <List>
@@ -107,12 +113,6 @@ const ReportsMenu = () => {
             selected={location.pathname === '/reports/audit'}
           />
         )}
-        <MenuItem
-          title="Live Streaming"
-          link="/reports/live"
-          icon={<VideocamIcon />}
-          selected={location.pathname === '/reports/live'}
-        />
       </List>
     </>
   );
