@@ -33,7 +33,7 @@ const useStyles = makeStyles()((theme) => ({
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: '1.5rem',
         aspectRatio: '16/9',
-        overflow: 'hidden',
+        // overflow: 'hidden',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
