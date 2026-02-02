@@ -218,7 +218,7 @@ const useStyles = makeStyles()(() => ({
 
 const API_URL = '/api/commands/send';
 const DEVICE_ID = 17;
-const RTC_SERVER_URL = "http://51.21.203.186:8080/";
+const RTC_SERVER_URL = "http://51.21.203.186:8080/291074436300";
 
 const LiveStreaming = () => {
     const { classes, cx } = useStyles();
@@ -302,7 +302,7 @@ const LiveStreaming = () => {
                 }));
             };
 
-            const res = await fetch(RTC_SERVER_URL, {
+            const res = await fetch(`${RTC_SERVER_URL}/${id}.rtc`, {
                 method: 'POST',
                 body: JSON.stringify(data),
                 headers: { 'Content-Type': 'application/json' },
