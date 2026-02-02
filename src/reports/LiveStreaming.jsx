@@ -78,24 +78,25 @@ const useStyles = makeStyles()(() => ({
         marginBottom: '2rem',
     },
     channelCard: {
-        background: 'var(--card-bg)',
-        border: '1px solid var(--border)',
-        borderRadius: '1rem',
-        padding: '1.25rem',
+        background: '#ffffff',
+        border: '1px solid #e2e8f0',
+        borderRadius: '1.25rem',
+        padding: '1.5rem',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        backdropFilter: 'blur(5px)',
         cursor: 'pointer',
+        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
         '&:hover': {
             borderColor: 'var(--primary)',
             transform: 'translateY(-2px)',
-            background: '#f1f5f9',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
         },
         '&.active': {
             borderColor: 'var(--primary)',
-            background: 'rgba(99, 102, 241, 0.1)',
+            background: 'rgba(99, 102, 241, 0.04)',
+            boxShadow: '0 10px 15px -3px rgba(99, 102, 241, 0.1)',
         },
     },
     channelInfo: {
@@ -391,33 +392,8 @@ const LiveStreaming = () => {
                                     onClick={(e) => e.stopPropagation()}
                                     onChange={() => handleToggle(id)}
                                     sx={{
-                                        width: 42,
-                                        height: 26,
-                                        padding: 0,
-                                        '& .MuiSwitch-switchBase': {
-                                            padding: 0,
-                                            margin: 2,
-                                            transitionDuration: '300ms',
-                                            '&.Mui-checked': {
-                                                transform: 'translateX(16px)',
-                                                color: '#fff',
-                                                '& + .MuiSwitch-track': {
-                                                    backgroundColor: 'var(--primary)',
-                                                    opacity: 1,
-                                                    border: 0,
-                                                },
-                                            },
-                                        },
-                                        '& .MuiSwitch-thumb': {
-                                            boxSizing: 'border-box',
-                                            width: 22,
-                                            height: 22,
-                                        },
-                                        '& .MuiSwitch-track': {
-                                            borderRadius: 26 / 2,
-                                            backgroundColor: '#E9E9EA',
-                                            opacity: 1,
-                                        },
+                                        '& .MuiSwitch-switchBase.Mui-checked': { color: 'var(--primary)' },
+                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: 'var(--primary)' },
                                     }}
                                 />
                             </Box>
