@@ -195,7 +195,13 @@ const LiveStreaming = () => {
     const [toasts, setToasts] = useState([]);
     const peerConnections = useRef({});
     const videoRefs = useRef({});
+    const channelsRef = useRef(channels);
 
+    useEffect(() => {
+        channelsRef.current = channels;
+    }, [channels]);
+
+    // Route cleanup and initialization
     useEffect(() => {
         setChannels({
             1: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
@@ -203,7 +209,16 @@ const LiveStreaming = () => {
             3: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
             4: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
         });
+
         return () => {
+            console.log('leave this route');
+            if (deviceId) {
+                [1, 2, 3, 4].forEach((id) => {
+                    if (channelsRef.current[id].active) {
+                        sendCommand(id, 'videoStop').catch(() => { });
+                    }
+                });
+            }
             Object.values(peerConnections.current).forEach((pc) => {
                 if (pc && pc.signalingState !== 'closed') pc.close();
             });
@@ -213,6 +228,18 @@ const LiveStreaming = () => {
             });
         };
     }, [deviceId]);
+
+    // Browser refresh/close alert (Window level)
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (Object.values(channelsRef.current).some(c => c.active)) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, []);
 
     const showToast = (message, isError = false) => {
         const id = Date.now();
