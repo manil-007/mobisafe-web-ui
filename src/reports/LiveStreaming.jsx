@@ -392,8 +392,9 @@ const LiveStreaming = () => {
                                     onClick={(e) => e.stopPropagation()}
                                     onChange={() => handleToggle(id)}
                                     sx={{
+                                        '& .MuiSwitch-track': { border: '1px solid black' },
                                         '& .MuiSwitch-switchBase.Mui-checked': { color: 'var(--primary)' },
-                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: 'var(--primary)' },
+                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: 'var(--primary)', border: '1px solid black' },
                                     }}
                                 />
                             </Box>
