@@ -160,7 +160,7 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 const API_URL = '/api/commands/send';
-const RTC_SERVER_BASE_URL = "http://51.21.203.186:8080";
+const RTC_SERVER_BASE_URL = import.meta.env.VITE_RTC_SERVER_BASE_URL || "https://stream.driversaathi.com";
 
 const LiveStreaming = () => {
     const { classes: reportClasses } = useReportStyles();
