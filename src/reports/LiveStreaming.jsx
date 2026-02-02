@@ -1,4 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { makeStyles } from 'tss-react/mui';
 import {
     Box,
@@ -7,110 +9,16 @@ import {
     Badge,
     CircularProgress,
     Fade,
+    Autocomplete,
+    TextField,
 } from '@mui/material';
 import PageLayout from '../common/components/PageLayout';
 import ReportsMenu from './components/ReportsMenu';
+import useReportStyles from './common/useReportStyles';
 import fetchOrThrow from '../common/util/fetchOrThrow';
-import { useCatch } from '../reactHelper';
+import { useCatch, useEffectAsync } from '../reactHelper';
 
-const useStyles = makeStyles()(() => ({
-    root: {
-        '--primary': '#6366f1',
-        '--primary-hover': '#4f46e5',
-        '--bg': '#ffffff',
-        '--card-bg': '#f8fafc',
-        '--border': '#e2e8f0',
-        '--text': '#0f172a',
-        '--text-muted': '#64748b',
-        '--success': '#10b981',
-        '--danger': '#ef4444',
-        backgroundColor: 'var(--bg)',
-        color: 'var(--text)',
-        minHeight: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            background: 'radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15), transparent)',
-            zIndex: 0,
-            pointerEvents: 'none',
-        },
-    },
-    header: {
-        padding: '1.5rem 2rem',
-        background: 'rgba(255, 255, 255, 0.8)',
-        backdropFilter: 'blur(10px)',
-        borderBottom: '1px solid var(--border)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: '1.5rem',
-        fontWeight: 700,
-        letterSpacing: '-0.025em',
-        background: 'linear-gradient(to right, #818cf8, #c084fc)',
-        WebkitBackgroundClip: 'text',
-        backgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-    },
-    container: {
-        maxWidth: '1400px',
-        margin: '2rem auto',
-        padding: '0 2rem',
-        width: '100%',
-        flexGrow: 1,
-        zIndex: 1,
-    },
-    controls: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '1rem',
-        marginBottom: '2rem',
-    },
-    channelCard: {
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '1.25rem',
-        padding: '1.5rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        cursor: 'pointer',
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-        '&:hover': {
-            borderColor: 'var(--primary)',
-            transform: 'translateY(-2px)',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-        },
-        '&.active': {
-            borderColor: 'var(--primary)',
-            background: 'rgba(99, 102, 241, 0.04)',
-            boxShadow: '0 10px 15px -3px rgba(99, 102, 241, 0.1)',
-        },
-    },
-    channelInfo: {
-        display: 'flex',
-        flexDirection: 'column',
-    },
-    channelName: {
-        fontWeight: 600,
-        fontSize: '1rem',
-    },
-    channelStatus: {
-        fontSize: '0.75rem',
-        color: 'var(--text-muted)',
-    },
+const useStyles = makeStyles()((theme) => ({
     videoGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))',
@@ -121,23 +29,23 @@ const useStyles = makeStyles()(() => ({
         },
     },
     videoContainer: {
-        background: 'var(--card-bg)',
-        border: '1px solid var(--border)',
+        background: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.divider}`,
         borderRadius: '1.5rem',
         aspectRatio: '16/9',
         overflow: 'hidden',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        boxShadow: theme.shadows[3],
     },
     videoHeader: {
         padding: '0.75rem 1.25rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: '#f1f5f9',
-        borderBottom: '1px solid var(--border)',
+        background: theme.palette.background.default,
+        borderBottom: `1px solid ${theme.palette.divider}`,
         zIndex: 10,
     },
     videoTitle: {
@@ -150,29 +58,20 @@ const useStyles = makeStyles()(() => ({
     liveIndicator: {
         width: '8px',
         height: '8px',
-        background: 'var(--danger)',
+        background: theme.palette.error.main,
         borderRadius: '50%',
         boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7)',
         animation: 'pulse 2s infinite',
     },
     '@keyframes pulse': {
-        '0%': {
-            transform: 'scale(0.95)',
-            boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7)',
-        },
-        '70%': {
-            transform: 'scale(1)',
-            boxShadow: '0 0 0 6px rgba(239, 68, 68, 0)',
-        },
-        '100%': {
-            transform: 'scale(0.95)',
-            boxShadow: '0 0 0 0 rgba(239, 68, 68, 0)',
-        },
+        '0%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7)' },
+        '70%': { transform: 'scale(1)', boxShadow: '0 0 0 6px rgba(239, 68, 68, 0)' },
+        '100%': { transform: 'scale(0.95)', boxShadow: '0 0 0 0 rgba(239, 68, 68, 0)' },
     },
     video: {
         width: '100%',
         height: '100%',
-        objectFit: 'cover',
+        objectFit: 'contain',
         background: '#000',
     },
     noVideo: {
@@ -182,14 +81,53 @@ const useStyles = makeStyles()(() => ({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        color: 'var(--text-muted)',
+        color: theme.palette.text.secondary,
         gap: '1rem',
         zIndex: 5,
         background: 'rgba(255, 255, 255, 0.8)',
     },
+    controls: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1rem',
+        marginBottom: '2rem',
+    },
+    channelCard: {
+        background: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: '1.25rem',
+        padding: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'pointer',
+        boxShadow: theme.shadows[1],
+        '&:hover': {
+            borderColor: theme.palette.primary.main,
+            transform: 'translateY(-2px)',
+            boxShadow: theme.shadows[4],
+        },
+        '&.active': {
+            borderColor: theme.palette.primary.main,
+            background: 'rgba(99, 102, 241, 0.04)',
+            boxShadow: '0 10px 15px -3px rgba(99, 102, 241, 0.1)',
+        },
+    },
+    channelInfo: {
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    channelName: {
+        fontWeight: 600,
+        fontSize: '0.875rem',
+    },
+    channelStatus: {
+        fontSize: '0.75rem',
+    },
     badge: {
         background: 'rgba(99, 102, 241, 0.2)',
-        color: 'var(--primary)',
+        color: theme.palette.primary.main,
         padding: '2px 8px',
         borderRadius: '4px',
         fontSize: '0.7rem',
@@ -204,8 +142,8 @@ const useStyles = makeStyles()(() => ({
         zIndex: 1000,
     },
     toast: {
-        background: 'rgba(255, 255, 255, 0.9)',
-        border: '1px solid var(--border)',
+        background: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.divider}`,
         padding: '1rem 1.5rem',
         borderRadius: '0.75rem',
         marginTop: '0.5rem',
@@ -213,31 +151,68 @@ const useStyles = makeStyles()(() => ({
         display: 'flex',
         alignItems: 'center',
         gap: '0.75rem',
-        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+        boxShadow: theme.shadows[6],
+    },
+    filterItem: {
+        minWidth: 0,
+        flex: `1 1 ${theme.dimensions.filterFormWidth}`,
     },
 }));
 
 const API_URL = '/api/commands/send';
-const DEVICE_ID = 17;
-const RTC_SERVER_URL = "http://51.21.203.186:8080/291074436300";
+const RTC_SERVER_BASE_URL = "http://51.21.203.186:8080";
 
 const LiveStreaming = () => {
+    const { classes: reportClasses } = useReportStyles();
     const { classes, cx } = useStyles();
+    const navigate = useNavigate();
+    const { deviceId: paramDeviceId } = useParams();
+    const [devices, setDevices] = useState([]);
+    const [fetchingDevices, setFetchingDevices] = useState(true);
+    const selectedDeviceId = useSelector((state) => state.devices.selectedId);
+    const deviceId = paramDeviceId || selectedDeviceId;
+
+    useEffectAsync(async () => {
+        setFetchingDevices(true);
+        try {
+            const response = await fetchOrThrow('/api/devices');
+            const allDevices = await response.json();
+            setDevices(allDevices.filter((d) => d.model?.toUpperCase() === 'JT808'));
+        } finally {
+            setFetchingDevices(false);
+        }
+    }, []);
+
+    const currentDevice = useMemo(() => devices.find((d) => d.id === parseInt(deviceId, 10)), [devices, deviceId]);
+    const isUnknown = !currentDevice || currentDevice.status === 'unknown';
+
     const [channels, setChannels] = useState({
-        1: { active: false, status: 'Disconnected', color: 'var(--text-muted)', loading: false },
-        2: { active: false, status: 'Disconnected', color: 'var(--text-muted)', loading: false },
-        3: { active: false, status: 'Disconnected', color: 'var(--text-muted)', loading: false },
-        4: { active: false, status: 'Disconnected', color: 'var(--text-muted)', loading: false },
+        1: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
+        2: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
+        3: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
+        4: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
     });
     const [toasts, setToasts] = useState([]);
     const peerConnections = useRef({});
     const videoRefs = useRef({});
 
     useEffect(() => {
+        setChannels({
+            1: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
+            2: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
+            3: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
+            4: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
+        });
         return () => {
-            Object.values(peerConnections.current).forEach((pc) => pc.close());
+            Object.values(peerConnections.current).forEach((pc) => {
+                if (pc && pc.signalingState !== 'closed') pc.close();
+            });
+            peerConnections.current = {};
+            Object.values(videoRefs.current).forEach(ref => {
+                if (ref) ref.srcObject = null;
+            });
         };
-    }, []);
+    }, [deviceId]);
 
     const showToast = (message, isError = false) => {
         const id = Date.now();
@@ -248,13 +223,14 @@ const LiveStreaming = () => {
     };
 
     const sendCommand = async (channelId, type) => {
+        if (!deviceId) return null;
         const payload = {
             attributes: {
                 channel: channelId,
                 mediaType: 0,
                 streamType: 0
             },
-            deviceId: DEVICE_ID,
+            deviceId: parseInt(deviceId, 10),
             type: type,
             textChannel: false,
             description: type === 'videoStart'
@@ -303,7 +279,13 @@ const LiveStreaming = () => {
                 }));
             };
 
-            const res = await fetch(`${RTC_SERVER_URL}/${id}.rtc`, {
+            if (!currentDevice) {
+                console.error('Streaming Error: currentDevice is undefined', { deviceId, devices });
+                throw new Error('Device not found or not JT808');
+            }
+            const rtcUrl = `${RTC_SERVER_BASE_URL}/${currentDevice.uniqueId}/${id}.rtc`;
+            console.log(`Starting WebRTC for ${currentDevice.name} at ${rtcUrl}`);
+            const res = await fetch(rtcUrl, {
                 method: 'POST',
                 body: JSON.stringify(data),
                 headers: { 'Content-Type': 'application/json' },
@@ -317,7 +299,7 @@ const LiveStreaming = () => {
             showToast(`Stream Error for Channel ${id}`, true);
             setChannels(prev => ({
                 ...prev,
-                [id]: { ...prev[id], status: 'Error', color: 'var(--danger)', loading: false }
+                [id]: { ...prev[id], status: 'Error', color: 'error.main', loading: false }
             }));
         }
     };
@@ -342,7 +324,7 @@ const LiveStreaming = () => {
                 ...prev[id],
                 active: isActivating,
                 status: isActivating ? 'Connecting...' : 'Disconnected',
-                color: isActivating ? 'var(--text-muted)' : 'var(--text-muted)',
+                color: 'textSecondary',
                 loading: isActivating
             },
         }));
@@ -353,13 +335,13 @@ const LiveStreaming = () => {
                 await sendCommand(id, 'videoStart');
                 setChannels((prev) => ({
                     ...prev,
-                    [id]: { ...prev[id], status: 'Streaming', color: 'var(--success)' },
+                    [id]: { ...prev[id], status: 'Streaming', color: 'success.main' },
                 }));
                 startWebRTC(id);
             } catch (error) {
                 setChannels((prev) => ({
                     ...prev,
-                    [id]: { ...prev[id], active: false, status: 'Error', color: 'var(--danger)', loading: false },
+                    [id]: { ...prev[id], active: false, status: 'Error', color: 'error.main', loading: false },
                 }));
                 throw error;
             }
@@ -372,81 +354,139 @@ const LiveStreaming = () => {
 
     return (
         <PageLayout menu={<ReportsMenu />} breadcrumbs={['reportTitle', 'Live Streaming']}>
-            <Box className={classes.root}>
-                <Box className={classes.container}>
-                    <Box className={classes.controls}>
-                        {[1, 2, 3, 4].map((id) => (
-                            <Box
-                                key={id}
-                                className={cx(classes.channelCard, { active: channels[id].active })}
-                                onClick={() => handleToggle(id)}
-                            >
-                                <Box className={classes.channelInfo}>
-                                    <Typography className={classes.channelName}>Channel {id}</Typography>
-                                    <Typography className={classes.channelStatus} style={{ color: channels[id].color }}>
-                                        {channels[id].status}
-                                    </Typography>
+            <div className={reportClasses.container}>
+                <div className={reportClasses.header}>
+                    <div className={reportClasses.filter}>
+                        <div className={classes.filterItem}>
+                            <Autocomplete
+                                options={devices}
+                                loading={fetchingDevices}
+                                getOptionLabel={(option) => `${option.name} (${option.model || 'Unknown'})`}
+                                value={devices.find((d) => d.id === parseInt(deviceId, 10)) || null}
+                                onChange={(_, newValue) => {
+                                    if (newValue) {
+                                        navigate(`/reports/live/${newValue.id}`);
+                                    }
+                                }}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        label="Select Device for Streaming"
+                                        variant="outlined"
+                                        InputProps={{
+                                            ...params.InputProps,
+                                            endAdornment: (
+                                                <React.Fragment>
+                                                    {fetchingDevices ? <CircularProgress color="inherit" size={20} /> : null}
+                                                    {params.InputProps.endAdornment}
+                                                </React.Fragment>
+                                            ),
+                                        }}
+                                    />
+                                )}
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div className={reportClasses.containerMain} style={{ padding: '0 2rem 2rem' }}>
+                    {fetchingDevices && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                            <CircularProgress />
+                        </Box>
+                    )}
+                    {!fetchingDevices && devices.length === 0 && (
+                        <Typography variant="h6" align="center" sx={{ mt: 4, color: 'textSecondary' }}>
+                            No JT808 devices found in your account.
+                        </Typography>
+                    )}
+                    {!fetchingDevices && devices.length > 0 && !deviceId && (
+                        <Typography variant="h6" align="center" sx={{ mt: 4, color: 'textSecondary' }}>
+                            Please select a device to start live streaming
+                        </Typography>
+                    )}
+                    {!fetchingDevices && deviceId && (
+                        <>
+                            {isUnknown && (
+                                <Box sx={{ mb: 3, p: 2, background: '#fff4f4', border: '1px solid #ffcdd2', borderRadius: '1rem', color: '#d32f2f', fontWeight: 500, textAlign: 'center' }}>
+                                    Streaming is disabled because this device is currently offline or its status is unknown.
                                 </Box>
-                                <Switch
-                                    checked={channels[id].active}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={() => handleToggle(id)}
-                                    sx={{
-                                        '& .MuiSwitch-track': { border: '1px solid black' },
-                                        '& .MuiSwitch-switchBase.Mui-checked': { color: 'var(--primary)' },
-                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: 'var(--primary)', border: '1px solid black' },
-                                    }}
-                                />
-                            </Box>
-                        ))}
-                    </Box>
-
-                    <Box className={classes.videoGrid}>
-                        {[1, 2, 3, 4].map((id) => (
-                            channels[id].active && (
-                                <Fade in={channels[id].active} key={id}>
-                                    <Box className={classes.videoContainer}>
-                                        <Box className={classes.videoHeader}>
-                                            <Box className={classes.videoTitle}>
-                                                <Box className={classes.liveIndicator} />
-                                                Channel {id} - Live
-                                            </Box>
-                                            <Box className={classes.badge}>HD</Box>
+                            )}
+                            <Box className={classes.controls} sx={{ mt: 2, opacity: isUnknown ? 0.6 : 1 }}>
+                                {[1, 2, 3, 4].map((id) => (
+                                    <Box
+                                        key={id}
+                                        className={cx(classes.channelCard, { active: channels[id].active })}
+                                        onClick={() => handleToggle(id)}
+                                    >
+                                        <Box className={classes.channelInfo}>
+                                            <Typography className={classes.channelName}>Channel {id}</Typography>
+                                            <Typography className={classes.channelStatus} sx={{ color: channels[id].color }}>
+                                                {channels[id].status}
+                                            </Typography>
                                         </Box>
-                                        <video
-                                            ref={(el) => (videoRefs.current[id] = el)}
-                                            className={classes.video}
-                                            autoPlay
-                                            muted
-                                            playsInline
-                                            controls
+                                        <Switch
+                                            checked={channels[id].active}
+                                            disabled={isUnknown}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={() => handleToggle(id)}
+                                            sx={{
+                                                '& .MuiSwitch-track': { border: '1px solid black' },
+                                                '& .MuiSwitch-switchBase.Mui-disabled + .MuiSwitch-track': { backgroundColor: '#e0e0e0', border: '1px solid #bdbdbd' },
+                                                '& .MuiSwitch-switchBase.Mui-checked': { color: 'primary.main' },
+                                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: 'primary.main', border: '1px solid black' },
+                                            }}
                                         />
-                                        {channels[id].loading && (
-                                            <Box className={classes.noVideo}>
-                                                <CircularProgress size={40} sx={{ color: 'var(--primary)' }} />
-                                                <Typography variant="body2">Initializing Stream...</Typography>
-                                            </Box>
-                                        )}
                                     </Box>
-                                </Fade>
-                            )
-                        ))}
-                    </Box>
-                </Box>
+                                ))}
+                            </Box>
 
+                            <Box className={classes.videoGrid}>
+                                {[1, 2, 3, 4].map((id) => (
+                                    channels[id].active && (
+                                        <Fade in={channels[id].active} key={id}>
+                                            <Box className={classes.videoContainer}>
+                                                <Box className={classes.videoHeader}>
+                                                    <Box className={classes.videoTitle}>
+                                                        <Box className={classes.liveIndicator} />
+                                                        Channel {id} - Live
+                                                    </Box>
+                                                    <Box className={classes.badge}>HD</Box>
+                                                </Box>
+                                                <video
+                                                    ref={(el) => (videoRefs.current[id] = el)}
+                                                    className={classes.video}
+                                                    autoPlay
+                                                    muted
+                                                    playsInline
+                                                    controls
+                                                />
+                                                {channels[id].loading && (
+                                                    <Box className={classes.noVideo}>
+                                                        <CircularProgress size={40} />
+                                                        <Typography variant="body2">Initializing Stream...</Typography>
+                                                    </Box>
+                                                )}
+                                            </Box>
+                                        </Fade>
+                                    )
+                                ))}
+                            </Box>
+                        </>
+                    )}
+                </div>
                 <Box className={classes.toastContainer}>
                     {toasts.map((toast) => (
                         <Fade in key={toast.id}>
                             <Box
                                 className={classes.toast}
-                                sx={{ borderLeft: `4px solid ${toast.isError ? 'var(--danger)' : 'var(--primary)'}` }}
+                                sx={{ borderLeft: (theme) => `4px solid ${toast.isError ? theme.palette.error.main : theme.palette.primary.main}` }}
                             >
                                 <Box
                                     sx={{
                                         width: '8px',
                                         height: '8px',
                                         borderRadius: '50%',
-                                        background: toast.isError ? 'var(--danger)' : 'var(--primary)',
+                                        background: (theme) => toast.isError ? theme.palette.error.main : theme.palette.primary.main,
                                     }}
                                 />
                                 <Typography variant="body2">{toast.message}</Typography>
@@ -454,7 +494,7 @@ const LiveStreaming = () => {
                         </Fade>
                     ))}
                 </Box>
-            </Box>
+            </div>
         </PageLayout>
     );
 };

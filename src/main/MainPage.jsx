@@ -16,6 +16,7 @@ import useFilter from './useFilter';
 import MainToolbar from './MainToolbar';
 import MainMap from './MainMap';
 import { useAttributePreference } from '../common/util/preferences';
+import LiveStreamingDialog from '../common/components/LiveStreamingDialog';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -91,6 +92,7 @@ const MainPage = () => {
 
   const [devicesOpen, setDevicesOpen] = useState(desktop);
   const [eventsOpen, setEventsOpen] = useState(false);
+  const [streamingOpen, setStreamingOpen] = useState(false);
 
   const onEventsClick = useCallback(() => setEventsOpen(true), [setEventsOpen]);
 
@@ -153,9 +155,15 @@ const MainPage = () => {
           deviceId={selectedDeviceId}
           position={selectedPosition}
           onClose={() => dispatch(devicesActions.selectId(null))}
+          onStreaming={() => setStreamingOpen(true)}
           desktopPadding={theme.dimensions.drawerWidthDesktop}
         />
       )}
+      <LiveStreamingDialog
+        open={streamingOpen}
+        onClose={() => setStreamingOpen(false)}
+        deviceId={selectedDeviceId}
+      />
     </div>
   );
 };
