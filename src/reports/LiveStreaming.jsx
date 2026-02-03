@@ -6,7 +6,6 @@ import {
     Box,
     Typography,
     Switch,
-    Badge,
     CircularProgress,
     Fade,
     Autocomplete,
@@ -184,7 +183,7 @@ const LiveStreaming = () => {
     }, []);
 
     const currentDevice = useMemo(() => devices.find((d) => d.id === parseInt(deviceId, 10)), [devices, deviceId]);
-    const isUnknown = !currentDevice || currentDevice.status === 'unknown';
+    const isUnknown = !currentDevice || currentDevice.status === 'unknown' || currentDevice.status === 'offline';
 
     const [channels, setChannels] = useState({
         1: { active: false, status: 'Disconnected', color: 'textSecondary', loading: false },
@@ -343,6 +342,7 @@ const LiveStreaming = () => {
     };
 
     const handleToggle = useCatch(async (id) => {
+        if (isUnknown) return;
         const isActivating = !channels[id].active;
 
         setChannels((prev) => ({
@@ -443,7 +443,8 @@ const LiveStreaming = () => {
                                     <Box
                                         key={id}
                                         className={cx(classes.channelCard, { active: channels[id].active })}
-                                        onClick={() => handleToggle(id)}
+                                        onClick={() => !isUnknown && handleToggle(id)}
+                                        sx={{ cursor: isUnknown ? 'not-allowed' : 'pointer' }}
                                     >
                                         <Box className={classes.channelInfo}>
                                             <Typography className={classes.channelName}>Channel {id}</Typography>
