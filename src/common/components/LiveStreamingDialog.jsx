@@ -19,6 +19,8 @@ import MicIcon from '@mui/icons-material/Mic';
 import MicOffIcon from '@mui/icons-material/MicOff';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import HistoryIcon from '@mui/icons-material/History';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import Alert from '@mui/material/Alert';
 import { makeStyles } from 'tss-react/mui';
 import { useSelector } from 'react-redux';
 import VideoPlaybackTab from './VideoPlaybackTab';
@@ -188,6 +190,7 @@ const LiveStreamingDialog = ({ open, onClose, deviceId }) => {
     const talkWebSocketRef = useRef({});
 
     const device = useSelector((state) => state.devices.items[deviceId]);
+    const isDeviceOnline = device?.status === 'online';
 
     // Cleanup on unmount
     useEffect(() => {
@@ -303,6 +306,7 @@ const LiveStreamingDialog = ({ open, onClose, deviceId }) => {
 
     // Toggle channel stream
     const handleToggle = useCallback(async (id) => {
+        if (!isDeviceOnline) return;
         const isActivating = !channels[id].active;
 
         setChannels((prev) => ({
@@ -323,7 +327,7 @@ const LiveStreamingDialog = ({ open, onClose, deviceId }) => {
                 stopTalking(id);
             }
         }
-    }, [channels, startWebRTC, stopWebRTC, stopTalking]);
+    }, [isDeviceOnline, channels, startWebRTC, stopWebRTC, stopTalking]);
 
     // Start talk-back (microphone)
     const startTalking = useCallback(async (id) => {
@@ -418,6 +422,20 @@ const LiveStreamingDialog = ({ open, onClose, deviceId }) => {
             <Box className={classes.content}>
                 {activeTab === 0 && (
                     <Box className={classes.tabContent}>
+                        {!isDeviceOnline && (
+                            <Alert
+                                severity="warning"
+                                icon={<WifiOffIcon />}
+                                sx={{ mb: 2, borderRadius: 2 }}
+                            >
+                                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                                    Device is currently offline
+                                </Typography>
+                                <Typography variant="body2">
+                                    Live streaming is not available while the device is offline. Streams will be available once the device reconnects.
+                                </Typography>
+                            </Alert>
+                        )}
                         <Box className={classes.controls}>
                             {[1, 2, 3, 4].map((id) => (
                                 <Box
@@ -435,6 +453,7 @@ const LiveStreamingDialog = ({ open, onClose, deviceId }) => {
                                     </Box>
                                     <Switch
                                         checked={channels[id].active}
+                                        disabled={!isDeviceOnline}
                                         onClick={(e) => e.stopPropagation()}
                                         onChange={() => handleToggle(id)}
                                         sx={{

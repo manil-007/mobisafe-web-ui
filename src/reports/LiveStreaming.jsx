@@ -19,6 +19,8 @@ import MicOffIcon from '@mui/icons-material/MicOff';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import Alert from '@mui/material/Alert';
 import PageLayout from '../common/components/PageLayout';
 import ReportsMenu from './components/ReportsMenu';
 import useReportStyles from './common/useReportStyles';
@@ -179,6 +181,10 @@ const LiveStreaming = () => {
     const [fetchingDevices, setFetchingDevices] = useState(true);
     const selectedDeviceId = useSelector((state) => state.devices.selectedId);
     const deviceId = paramDeviceId || selectedDeviceId;
+
+    // Get real-time device status from Redux store (updated via WebSocket)
+    const storeDevice = useSelector((state) => state.devices.items[deviceId]);
+    const isDeviceOnline = storeDevice?.status === 'online';
 
     const [channels, setChannels] = useState({
         1: { active: false, status: 'Off', loading: false, muted: true, talking: false },
@@ -363,6 +369,7 @@ const LiveStreaming = () => {
     // Toggle channel stream
     const handleToggle = useCallback(async (id) => {
         if (!currentDevice) return;
+        if (!isDeviceOnline) return;
 
         const isActivating = !channels[id].active;
 
@@ -384,7 +391,7 @@ const LiveStreaming = () => {
                 stopTalking(id);
             }
         }
-    }, [currentDevice, channels, startWebRTC, stopWebRTC, stopTalking]);
+    }, [currentDevice, isDeviceOnline, channels, startWebRTC, stopWebRTC, stopTalking]);
 
     // Start talk-back (microphone)
     const startTalking = useCallback(async (id) => {
@@ -545,7 +552,7 @@ const LiveStreaming = () => {
                                         checked={channels[id].active}
                                         onClick={(e) => e.stopPropagation()}
                                         onChange={() => handleToggle(id)}
-                                        disabled={!currentDevice}
+                                        disabled={!currentDevice || !isDeviceOnline}
                                         color="primary"
                                     />
                                 </Box>
@@ -553,6 +560,22 @@ const LiveStreaming = () => {
                         </Box>
                     </Box>
                 </Paper>
+
+                {/* Device offline warning */}
+                {currentDevice && !isDeviceOnline && (
+                    <Alert
+                        severity="warning"
+                        icon={<WifiOffIcon />}
+                        sx={{ borderRadius: 2 }}
+                    >
+                        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                            Device is currently offline
+                        </Typography>
+                        <Typography variant="body2">
+                            Live streaming is not available while the device is offline. Streams will be available once the device reconnects.
+                        </Typography>
+                    </Alert>
+                )}
 
                 {/* Video grid */}
                 <Box className={classes.videoGrid}>
