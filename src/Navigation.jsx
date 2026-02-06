@@ -34,6 +34,8 @@ import CommandsPage from './settings/CommandsPage';
 import CommandPage from './settings/CommandPage';
 import StatisticsPage from './reports/StatisticsPage';
 import LiveStreaming from './reports/LiveStreaming';
+import VideoPlayback from './reports/VideoPlayback';
+import PhotoCapture from './reports/PhotoCapture';
 import LoginPage from './login/LoginPage';
 import RegisterPage from './login/RegisterPage';
 import ResetPasswordPage from './login/ResetPasswordPage';
@@ -183,6 +185,10 @@ const Navigation = () => {
           <Route path="logs" element={<LogsPage />} />
           <Route path="live" element={<LiveStreaming />} />
           <Route path="live/:deviceId" element={<LiveStreaming />} />
+          <Route path="playback" element={<VideoPlayback />} />
+          <Route path="playback/:deviceId" element={<VideoPlayback />} />
+          <Route path="capture" element={<PhotoCapture />} />
+          <Route path="capture/:deviceId" element={<PhotoCapture />} />
         </Route>
       </Route>
     </Routes>
