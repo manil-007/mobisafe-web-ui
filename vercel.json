@@ -7,14 +7,14 @@
       "config": { "distDir": "build" }
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "https://api.driversaathi.com/api/$1"
+      "source": "/api/(.*)",
+      "destination": "https://api.driversaathi.com/api/$1"
     },
     {
-      "src": "/(.*)",
-      "dest": "/build/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
