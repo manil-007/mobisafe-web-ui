@@ -4,6 +4,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://api.driversaathi.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "builds": [
