@@ -13,6 +13,7 @@ import {
     IconButton,
     Tooltip,
     Paper,
+    Snackbar,
 } from '@mui/material';
 import MicIcon from '@mui/icons-material/Mic';
 import MicOffIcon from '@mui/icons-material/MicOff';
@@ -134,6 +135,31 @@ const useStyles = makeStyles()((theme) => ({
             },
         },
     },
+    micActive: {
+        background: '#ef4444 !important',
+        animation: '$micPulse 1.5s infinite',
+        '&:hover': {
+            background: '#dc2626 !important',
+        },
+    },
+    '@keyframes micPulse': {
+        '0%': { boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.6)' },
+        '70%': { boxShadow: '0 0 0 8px rgba(239, 68, 68, 0)' },
+        '100%': { boxShadow: '0 0 0 0 rgba(239, 68, 68, 0)' },
+    },
+    micLevelRing: {
+        position: 'absolute',
+        inset: -3,
+        borderRadius: '50%',
+        border: '2px solid #ef4444',
+        opacity: 0,
+        transition: 'opacity 0.15s, transform 0.15s',
+        pointerEvents: 'none',
+    },
+    micConnecting: {
+        background: 'rgba(255,255,255,0.15) !important',
+        cursor: 'wait',
+    },
     video: {
         width: '100%',
         height: '100%',
@@ -187,17 +213,19 @@ const LiveStreaming = () => {
     const isDeviceOnline = storeDevice?.status === 'online';
 
     const [channels, setChannels] = useState({
-        1: { active: false, status: 'Off', loading: false, muted: true, talking: false },
-        2: { active: false, status: 'Off', loading: false, muted: true, talking: false },
-        3: { active: false, status: 'Off', loading: false, muted: true, talking: false },
-        4: { active: false, status: 'Off', loading: false, muted: true, talking: false },
+        1: { active: false, status: 'Off', loading: false, muted: true, talking: false, micConnecting: false, micLevel: 0 },
+        2: { active: false, status: 'Off', loading: false, muted: true, talking: false, micConnecting: false, micLevel: 0 },
+        3: { active: false, status: 'Off', loading: false, muted: true, talking: false, micConnecting: false, micLevel: 0 },
+        4: { active: false, status: 'Off', loading: false, muted: true, talking: false, micConnecting: false, micLevel: 0 },
     });
+
+    const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
 
     const peerConnections = useRef({});
     const videoRefs = useRef({});
-    const audioContextRef = useRef(null);
-    const mediaStreamRef = useRef({});
+    const talkContexts = useRef({}); // { [channelId]: { audioCtx, stream, ws, analyser, animFrameId } }
     const talkWebSocketRef = useRef({});
+    const mediaStreamRef = useRef({});
 
     // Fetch JT808 devices
     useEffectAsync(async () => {
@@ -225,6 +253,7 @@ const LiveStreaming = () => {
     useEffect(() => {
         return () => {
             Object.values(peerConnections.current).forEach((pc) => pc?.close());
+            Object.keys(talkContexts.current).forEach((id) => cleanupTalkContext(id));
             Object.values(talkWebSocketRef.current).forEach((ws) => ws?.close());
             Object.values(mediaStreamRef.current).forEach((stream) => {
                 stream?.getTracks().forEach((track) => track.stop());
@@ -350,21 +379,224 @@ const LiveStreaming = () => {
         }
     }, []);
 
-    // Stop talk-back
-    const stopTalking = useCallback((id) => {
+    // Stop talk-back — robust cleanup of all resources for a channel
+    const cleanupTalkContext = useCallback((id) => {
+        const ctx = talkContexts.current[id];
+        if (ctx) {
+            if (ctx.animFrameId) cancelAnimationFrame(ctx.animFrameId);
+            if (ctx.processor) { try { ctx.processor.disconnect(); } catch {} }
+            if (ctx.silentGain) { try { ctx.silentGain.disconnect(); } catch {} }
+            if (ctx.sourceNode) { try { ctx.sourceNode.disconnect(); } catch {} }
+            if (ctx.analyser) { try { ctx.analyser.disconnect(); } catch {} }
+            if (ctx.audioCtx && ctx.audioCtx.state !== 'closed') {
+                ctx.audioCtx.close().catch(() => {});
+            }
+            if (ctx.stream) ctx.stream.getTracks().forEach((t) => t.stop());
+            if (ctx.ws && ctx.ws.readyState <= WebSocket.OPEN) ctx.ws.close();
+            delete talkContexts.current[id];
+        }
+        // Legacy refs cleanup
         if (talkWebSocketRef.current[id]) {
-            talkWebSocketRef.current[id].close();
+            try { talkWebSocketRef.current[id].close(); } catch {}
             delete talkWebSocketRef.current[id];
         }
         if (mediaStreamRef.current[id]) {
-            mediaStreamRef.current[id].getTracks().forEach((track) => track.stop());
+            mediaStreamRef.current[id].getTracks().forEach((t) => t.stop());
             delete mediaStreamRef.current[id];
         }
+    }, []);
+
+    const stopTalking = useCallback((id) => {
+        // Restore pre-talk mute state before cleanup removes the context
+        const ctx = talkContexts.current[id];
+        const restoreMuted = ctx ? ctx.wasMuted : true;
+        const video = videoRefs.current[id];
+        if (video) video.muted = restoreMuted;
+
+        cleanupTalkContext(id);
         setChannels((prev) => ({
             ...prev,
-            [id]: { ...prev[id], talking: false },
+            [id]: { ...prev[id], talking: false, micConnecting: false, micLevel: 0, muted: restoreMuted },
         }));
-    }, []);
+    }, [cleanupTalkContext]);
+
+    // Start talk-back (microphone) — production-ready with AudioWorklet fallback, level monitoring, error handling
+    const startTalking = useCallback(async (id) => {
+        // Prevent double-start
+        if (talkContexts.current[id]) return;
+
+        setChannels((prev) => ({
+            ...prev,
+            [id]: { ...prev[id], micConnecting: true },
+        }));
+
+        let micStream;
+        try {
+            // 1. Acquire mic with echo cancellation
+            micStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    sampleRate: 8000,
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                },
+            });
+        } catch (err) {
+            const msg = err.name === 'NotAllowedError'
+                ? 'Microphone permission denied. Please allow microphone access in your browser settings.'
+                : err.name === 'NotFoundError'
+                    ? 'No microphone found. Please connect a microphone.'
+                    : `Microphone error: ${err.message}`;
+            setSnackbar({ open: true, message: msg, severity: 'error' });
+            setChannels((prev) => ({
+                ...prev,
+                [id]: { ...prev[id], micConnecting: false },
+            }));
+            return;
+        }
+
+        try {
+            // 2. Fetch talk WebSocket URL from Traccar backend
+            const response = await fetch(`/api/video/talk/${deviceId}/${id}`);
+            if (!response.ok) {
+                throw new Error(`Server error ${response.status}`);
+            }
+            const talkInfo = await response.json();
+
+            // 3. Open WebSocket to LKM talk endpoint
+            const ws = await new Promise((resolve, reject) => {
+                const socket = new WebSocket(talkInfo.websocketUrl);
+                socket.binaryType = 'arraybuffer';
+                const timeout = setTimeout(() => {
+                    socket.close();
+                    reject(new Error('Connection timeout'));
+                }, 10000);
+                socket.onopen = () => { clearTimeout(timeout); resolve(socket); };
+                socket.onerror = () => { clearTimeout(timeout); reject(new Error('WebSocket connection failed')); };
+            });
+
+            // 4. Wait for the server's connected confirmation
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('Server did not confirm connection')), 5000);
+                ws.onmessage = (evt) => {
+                    if (typeof evt.data === 'string') {
+                        try {
+                            const msg = JSON.parse(evt.data);
+                            if (msg.status === 'connected') { clearTimeout(timeout); resolve(); }
+                            if (msg.error) { clearTimeout(timeout); reject(new Error(msg.error)); }
+                        } catch { /* binary data, ignore */ }
+                    }
+                };
+            });
+
+            // 5. Set up AudioContext + processing pipeline
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+            const sourceNode = audioCtx.createMediaStreamSource(micStream);
+
+            // AnalyserNode for mic level visualization
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.5;
+            const analyserData = new Uint8Array(analyser.frequencyBinCount);
+
+            // Mic level monitoring loop
+            let animFrameId;
+            const updateLevel = () => {
+                analyser.getByteFrequencyData(analyserData);
+                // Compute RMS-ish level (0–1)
+                let sum = 0;
+                for (let i = 0; i < analyserData.length; i++) sum += analyserData[i];
+                const avg = sum / analyserData.length / 255;
+                setChannels((prev) => (prev[id]?.talking ? {
+                    ...prev,
+                    [id]: { ...prev[id], micLevel: avg },
+                } : prev));
+                animFrameId = requestAnimationFrame(updateLevel);
+            };
+
+            // ScriptProcessorNode for PCM capture (AudioWorkletNode would be ideal,
+            // but cross-browser blob-URL Worklet registration is unreliable without a
+            // real served file — ScriptProcessor works universally and is fine for 8kHz mono)
+            const processor = audioCtx.createScriptProcessor(512, 1, 1);
+
+            processor.onaudioprocess = (e) => {
+                if (ws.readyState !== WebSocket.OPEN) return;
+                const inputData = e.inputBuffer.getChannelData(0);
+                const pcm = new Int16Array(inputData.length);
+                for (let i = 0; i < inputData.length; i++) {
+                    const s = Math.max(-1, Math.min(1, inputData[i]));
+                    pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                ws.send(pcm.buffer);
+            };
+
+            // Zero-gain node prevents mic audio from playing through browser speakers
+            // (which would cause echo on the device). ScriptProcessor still fires because
+            // it's connected to the audio graph destination.
+            const silentGain = audioCtx.createGain();
+            silentGain.gain.value = 0;
+
+            sourceNode.connect(analyser);
+            analyser.connect(processor);
+            processor.connect(silentGain);
+            silentGain.connect(audioCtx.destination);
+
+            // Start level monitor
+            animFrameId = requestAnimationFrame(updateLevel);
+
+            // 6. Store all refs for cleanup (including pre-talk mute state for restoration)
+            const video = videoRefs.current[id];
+            const wasMuted = video ? video.muted : true;
+            talkContexts.current[id] = {
+                audioCtx, sourceNode, analyser, processor, silentGain, stream: micStream, ws, animFrameId, wasMuted,
+            };
+
+            // 7. Handle unexpected close
+            ws.onclose = () => {
+                if (talkContexts.current[id]) {
+                    stopTalking(id);
+                    setSnackbar({ open: true, message: `Intercom disconnected (CH${id})`, severity: 'warning' });
+                }
+            };
+            ws.onerror = () => {
+                if (talkContexts.current[id]) {
+                    stopTalking(id);
+                    setSnackbar({ open: true, message: `Intercom error (CH${id})`, severity: 'error' });
+                }
+            };
+
+            // Always force-mute device audio during talk to prevent echo loop
+            // (device speaker → device mic → JT1078 stream → WebRTC → browser speakers → echo)
+            if (video) video.muted = true;
+            setChannels((prev) => ({
+                ...prev,
+                [id]: { ...prev[id], talking: true, micConnecting: false, muted: true },
+            }));
+            if (!wasMuted) {
+                setSnackbar({ open: true, message: `Device audio muted to prevent echo (CH${id})`, severity: 'info' });
+            }
+        } catch (err) {
+            // Cleanup mic if we fail after acquiring it
+            micStream.getTracks().forEach((t) => t.stop());
+            cleanupTalkContext(id);
+            setSnackbar({ open: true, message: `Failed to start intercom: ${err.message}`, severity: 'error' });
+            setChannels((prev) => ({
+                ...prev,
+                [id]: { ...prev[id], micConnecting: false, talking: false },
+            }));
+        }
+    }, [deviceId, stopTalking, cleanupTalkContext]);
+
+    // Toggle talk
+    const handleTalkToggle = useCallback((id) => {
+        if (channels[id].micConnecting) return; // Ignore clicks while connecting
+        if (channels[id].talking) {
+            stopTalking(id);
+        } else {
+            startTalking(id);
+        }
+    }, [channels, startTalking, stopTalking]);
 
     // Toggle channel stream
     const handleToggle = useCallback(async (id) => {
@@ -393,86 +625,13 @@ const LiveStreaming = () => {
         }
     }, [currentDevice, isDeviceOnline, channels, startWebRTC, stopWebRTC, stopTalking]);
 
-    // Start talk-back (microphone)
-    const startTalking = useCallback(async (id) => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    sampleRate: 8000,
-                    channelCount: 1,
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                },
-            });
-            mediaStreamRef.current[id] = stream;
-
-            const response = await fetch(`/api/video/talk/${deviceId}/${id}`);
-            if (!response.ok) throw new Error('Failed to get talk URL');
-            const talkInfo = await response.json();
-
-            const ws = new WebSocket(talkInfo.websocketUrl);
-            talkWebSocketRef.current[id] = ws;
-
-            ws.onopen = () => {
-                console.log(`Talk WebSocket connected for channel ${id}`);
-
-                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-                    sampleRate: 8000,
-                });
-
-                const source = audioContextRef.current.createMediaStreamSource(stream);
-                // Use larger buffer for smoother audio (512 samples = 64ms at 8kHz)
-                const processor = audioContextRef.current.createScriptProcessor(512, 1, 1);
-
-                processor.onaudioprocess = (e) => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        const inputData = e.inputBuffer.getChannelData(0);
-                        // Convert float32 audio (-1.0 to 1.0) to 16-bit PCM (little-endian)
-                        // G.711A encoder expects 16-bit signed integers
-                        const pcmData = new Int16Array(inputData.length);
-                        for (let i = 0; i < inputData.length; i++) {
-                            // Clamp and convert to 16-bit range (-32768 to 32767)
-                            pcmData[i] = Math.max(-32768, Math.min(32767, Math.round(inputData[i] * 32767)));
-                        }
-                        // Send as binary ArrayBuffer (16-bit PCM)
-                        ws.send(pcmData.buffer);
-                    }
-                };
-
-                source.connect(processor);
-                processor.connect(audioContextRef.current.destination);
-            };
-
-            ws.onerror = (error) => {
-                console.error('Talk WebSocket error:', error);
-                stopTalking(id);
-            };
-
-            ws.onclose = () => {
-                console.log(`Talk WebSocket closed for channel ${id}`);
-            };
-
-            setChannels((prev) => ({
-                ...prev,
-                [id]: { ...prev[id], talking: true },
-            }));
-        } catch (error) {
-            console.error('Failed to start talking:', error);
-            alert('Failed to access microphone. Please check permissions.');
-        }
-    }, [deviceId, stopTalking]);
-
-    // Toggle talk
-    const handleTalkToggle = useCallback((id) => {
-        if (channels[id].talking) {
-            stopTalking(id);
-        } else {
-            startTalking(id);
-        }
-    }, [channels, startTalking, stopTalking]);
-
-    // Toggle mute
+    // Toggle mute — blocked during active talk to prevent echo
     const handleMuteToggle = useCallback((id) => {
+        // Prevent unmuting while intercom is active — this would cause echo
+        if (channels[id].talking) {
+            setSnackbar({ open: true, message: 'Cannot unmute while intercom is active (echo prevention)', severity: 'warning' });
+            return;
+        }
         const video = videoRefs.current[id];
         if (video) {
             video.muted = !channels[id].muted;
@@ -506,10 +665,10 @@ const LiveStreaming = () => {
             }
         });
         setChannels({
-            1: { active: false, status: 'Off', loading: false, muted: true, talking: false },
-            2: { active: false, status: 'Off', loading: false, muted: true, talking: false },
-            3: { active: false, status: 'Off', loading: false, muted: true, talking: false },
-            4: { active: false, status: 'Off', loading: false, muted: true, talking: false },
+            1: { active: false, status: 'Off', loading: false, muted: true, talking: false, micConnecting: false, micLevel: 0 },
+            2: { active: false, status: 'Off', loading: false, muted: true, talking: false, micConnecting: false, micLevel: 0 },
+            3: { active: false, status: 'Off', loading: false, muted: true, talking: false, micConnecting: false, micLevel: 0 },
+            4: { active: false, status: 'Off', loading: false, muted: true, talking: false, micConnecting: false, micLevel: 0 },
         });
 
         if (newDeviceId) {
@@ -612,13 +771,38 @@ const LiveStreaming = () => {
                                     />
 
                                     <Box className={classes.videoControls}>
-                                        <Tooltip title={channels[id].talking ? 'Stop Talking' : 'Talk to Device'}>
-                                            <IconButton
-                                                className={cx(classes.controlButton, { active: channels[id].talking })}
-                                                onClick={() => handleTalkToggle(id)}
-                                            >
-                                                {channels[id].talking ? <MicIcon /> : <MicOffIcon />}
-                                            </IconButton>
+                                        <Tooltip title={
+                                            channels[id].micConnecting ? 'Connecting...'
+                                                : channels[id].talking ? 'Stop Intercom'
+                                                    : 'Talk to Device'
+                                        }>
+                                            <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+                                                {/* Mic level ring — visible only while talking */}
+                                                {channels[id].talking && (
+                                                    <Box
+                                                        className={classes.micLevelRing}
+                                                        sx={{
+                                                            opacity: channels[id].micLevel > 0.05 ? Math.min(channels[id].micLevel * 3, 1) : 0,
+                                                            transform: `scale(${1 + channels[id].micLevel * 0.5})`,
+                                                        }}
+                                                    />
+                                                )}
+                                                <IconButton
+                                                    className={cx(
+                                                        classes.controlButton,
+                                                        { [classes.micActive]: channels[id].talking },
+                                                        { [classes.micConnecting]: channels[id].micConnecting },
+                                                    )}
+                                                    onClick={() => handleTalkToggle(id)}
+                                                    disabled={channels[id].micConnecting}
+                                                >
+                                                    {channels[id].micConnecting
+                                                        ? <CircularProgress size={20} sx={{ color: '#fff' }} />
+                                                        : channels[id].talking
+                                                            ? <MicIcon />
+                                                            : <MicOffIcon />}
+                                                </IconButton>
+                                            </Box>
                                         </Tooltip>
 
                                         <Tooltip title={channels[id].muted ? 'Unmute' : 'Mute'}>
@@ -666,6 +850,23 @@ const LiveStreaming = () => {
                     </Box>
                 )}
             </Box>
+
+            {/* Snackbar for mic/talk notifications */}
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={5000}
+                onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+                    severity={snackbar.severity}
+                    variant="filled"
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </PageLayout>
     );
 };

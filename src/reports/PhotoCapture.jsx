@@ -213,31 +213,70 @@ const PhotoCapture = () => {
     
     const isUnknown = !currentDevice || currentDevice.status === 'unknown' || currentDevice.status === 'offline';
 
-    // Load captured images for the device
+    // Load captured images for the device using both media file listing and positions API
     const loadCapturedImages = useCallback(async () => {
-        if (!currentDevice?.uniqueId) return;
+        if (!currentDevice?.uniqueId || !deviceId) return;
         
         setLoadingImages(true);
         try {
-            // Fetch positions with images for this device
-            const response = await fetch(
-                `/api/positions?deviceId=${deviceId}&from=${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}&to=${new Date().toISOString()}`
-            );
-            
-            if (response.ok) {
-                const positions = await response.json();
-                // Filter positions that have images
-                const imagesFromPositions = positions
-                    .filter(p => p.attributes?.image)
-                    .map(p => ({
-                        id: p.id,
-                        url: `/api/media/${currentDevice.uniqueId}/${p.attributes.image}`,
-                        timestamp: p.deviceTime || p.fixTime,
-                        channel: p.attributes.channel || 'Unknown',
-                        thumbnail: `/api/media/${currentDevice.uniqueId}/${p.attributes.image}`,
-                    }));
-                setCapturedImages(imagesFromPositions);
+            const allImages = [];
+            const seenNames = new Set();
+
+            // Method 1: Use dedicated media files API (lists actual files on disk)
+            try {
+                const mediaResponse = await fetch(`/api/mediafiles/${deviceId}?type=image`);
+                if (mediaResponse.ok) {
+                    const mediaFiles = await mediaResponse.json();
+                    mediaFiles.forEach((file) => {
+                        if (!seenNames.has(file.name)) {
+                            seenNames.add(file.name);
+                            allImages.push({
+                                id: `file-${file.name}`,
+                                name: file.name,
+                                url: file.url,
+                                timestamp: file.lastModified,
+                                channel: 'Camera',
+                                thumbnail: file.url,
+                                size: file.size,
+                            });
+                        }
+                    });
+                }
+            } catch (mediaErr) {
+                console.warn('Media files API not available, falling back to positions:', mediaErr);
             }
+
+            // Method 2: Also check positions for images (for older data)
+            try {
+                const posResponse = await fetch(
+                    `/api/positions?deviceId=${deviceId}&from=${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}&to=${new Date().toISOString()}`
+                );
+                if (posResponse.ok) {
+                    const positions = await posResponse.json();
+                    positions
+                        .filter((p) => p.attributes?.image)
+                        .forEach((p) => {
+                            const imgName = p.attributes.image;
+                            if (!seenNames.has(imgName)) {
+                                seenNames.add(imgName);
+                                allImages.push({
+                                    id: p.id,
+                                    name: imgName,
+                                    url: `/api/media/${currentDevice.uniqueId}/${imgName}`,
+                                    timestamp: new Date(p.deviceTime || p.fixTime).getTime(),
+                                    channel: p.attributes.channel || 'Camera',
+                                    thumbnail: `/api/media/${currentDevice.uniqueId}/${imgName}`,
+                                });
+                            }
+                        });
+                }
+            } catch (posErr) {
+                console.warn('Failed to load images from positions:', posErr);
+            }
+
+            // Sort by timestamp (newest first)
+            allImages.sort((a, b) => b.timestamp - a.timestamp);
+            setCapturedImages(allImages);
         } catch (err) {
             console.error('Failed to load images:', err);
             setToast({ open: true, message: 'Failed to load captured images', severity: 'error' });
@@ -263,76 +302,118 @@ const PhotoCapture = () => {
         });
     };
 
-    // Send capture command
+    // Send capture command - one per channel, with correct JT808 attribute keys
     const handleCapture = async () => {
         if (!deviceId || selectedChannels.length === 0 || isUnknown) return;
         
         setIsCapturing(true);
+        const previousImageCount = capturedImages.length;
         
         try {
-            // Build channel flags (bitmask)
-            const channelFlags = selectedChannels.reduce((acc, ch) => acc | (1 << (ch - 1)), 0);
-            
-            const payload = {
-                attributes: {
-                    channel: channelFlags,
-                    command: 0, // 0 = take photo
-                    interval: saveInterval,
-                    saveFlag: 1, // 1 = save, 0 = real-time upload
-                    resolution: resolution,
-                    quality: quality,
-                    brightness: brightness,
-                    contrast: contrast,
-                    saturation: saturation,
-                    chroma: chroma,
-                },
-                deviceId: parseInt(deviceId, 10),
-                type: 'cameraCapture',
-                textChannel: false,
-            };
+            // Send one capture command per selected channel
+            const results = [];
+            for (const ch of selectedChannels) {
+                const payload = {
+                    attributes: {
+                        channel: ch,                   // Single channel ID (1-based)
+                        captureCommand: 1,             // 1 = take 1 photo (0=stop, 0xFFFF=record)
+                        captureInterval: saveInterval,  // Interval in seconds, 0=single shot
+                        saveFlag: 0,                   // 0 = real-time upload to server (NOT 1=save locally)
+                        resolution: resolution,         // 0x01-0x08 per JT808 spec
+                        quality: quality,               // 1-10
+                        brightness: brightness,         // 0-255
+                        contrast: contrast,             // 0-127
+                        saturation: saturation,         // 0-127
+                        chroma: chroma,                 // 0-255
+                    },
+                    deviceId: parseInt(deviceId, 10),
+                    type: 'cameraCapture',
+                    textChannel: false,
+                };
 
-            const response = await fetch('/api/commands/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
+                const response = await fetch('/api/commands/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                results.push({ channel: ch, ok: response.ok });
+            }
 
-            if (response.ok) {
+            const successChannels = results.filter(r => r.ok).map(r => r.channel);
+            const failChannels = results.filter(r => !r.ok).map(r => r.channel);
+
+            if (successChannels.length > 0) {
                 setToast({ 
                     open: true, 
-                    message: `Capture command sent for channel(s) ${selectedChannels.join(', ')}. Images will appear shortly.`, 
+                    message: `Capture command sent for channel(s) ${successChannels.join(', ')}. Waiting for device to upload photo...`, 
                     severity: 'success' 
                 });
                 
-                // Refresh images after a delay
+                // Poll for new images - device needs time to capture, encode, and upload
+                let pollCount = 0;
+                const maxPolls = 12; // Poll up to 12 times
+                const pollInterval = 3000; // Every 3 seconds (total ~36 seconds)
+                
+                const pollTimer = setInterval(async () => {
+                    pollCount += 1;
+                    await loadCapturedImages();
+                    
+                    // Check if new images appeared
+                    if (capturedImages.length > previousImageCount || pollCount >= maxPolls) {
+                        clearInterval(pollTimer);
+                        setIsCapturing(false);
+                        if (capturedImages.length > previousImageCount) {
+                            setToast({ 
+                                open: true, 
+                                message: 'New photo received! Click the download button to save it.', 
+                                severity: 'success' 
+                            });
+                        } else if (pollCount >= maxPolls) {
+                            setToast({ 
+                                open: true, 
+                                message: 'Photo capture command was sent. The device may still be uploading. Try refreshing.', 
+                                severity: 'info' 
+                            });
+                        }
+                    }
+                }, pollInterval);
+                
+                // Safety: clear polling after timeout even if state doesn't update
                 setTimeout(() => {
-                    loadCapturedImages();
-                }, 5000);
+                    clearInterval(pollTimer);
+                    setIsCapturing(false);
+                }, maxPolls * pollInterval + 1000);
             } else {
-                throw new Error('Failed to send capture command');
+                throw new Error(`Failed to send capture command to channel(s) ${failChannels.join(', ')}`);
             }
         } catch (err) {
             setToast({ open: true, message: err.message, severity: 'error' });
-        } finally {
             setIsCapturing(false);
         }
     };
 
-    // Download image
+    // Download image to client browser
     const handleDownload = async (image) => {
         try {
             const response = await fetch(image.url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
+            const blobUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `capture_${currentDevice.uniqueId}_ch${image.channel}_${new Date(image.timestamp).getTime()}.jpg`;
+            a.href = blobUrl;
+            // Use a descriptive filename: capture_<uniqueId>_<originalname>
+            const ext = image.name?.split('.').pop() || 'jpg';
+            a.download = `capture_${currentDevice.uniqueId}_${image.name || new Date(image.timestamp).getTime() + '.' + ext}`;
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
+            window.URL.revokeObjectURL(blobUrl);
             document.body.removeChild(a);
+            setToast({ open: true, message: 'Photo downloaded successfully!', severity: 'success' });
         } catch (err) {
-            setToast({ open: true, message: 'Failed to download image', severity: 'error' });
+            console.error('Download failed:', err);
+            setToast({ open: true, message: `Failed to download image: ${err.message}`, severity: 'error' });
         }
     };
 
@@ -493,10 +574,10 @@ const PhotoCapture = () => {
                                     <Box className={classes.emptyState}>
                                         <CameraAltIcon sx={{ fontSize: 64, opacity: 0.3 }} />
                                         <Typography variant="body1" sx={{ mt: 2 }}>
-                                            No captured images in the last 24 hours
+                                            No captured images found
                                         </Typography>
                                         <Typography variant="body2">
-                                            Use the capture button to take photos from the device camera
+                                            Click &quot;Capture Photo&quot; to take a photo from the device camera. The photo will be uploaded and available for download here.
                                         </Typography>
                                     </Box>
                                 ) : (
@@ -515,8 +596,13 @@ const PhotoCapture = () => {
                                                             {new Date(image.timestamp).toLocaleString()}
                                                         </Typography>
                                                         <Typography variant="body2">
-                                                            Channel {image.channel}
+                                                            {image.name || `Channel ${image.channel}`}
                                                         </Typography>
+                                                        {image.size && (
+                                                            <Typography variant="caption" color="textSecondary">
+                                                                {(image.size / 1024).toFixed(1)} KB
+                                                            </Typography>
+                                                        )}
                                                     </CardContent>
                                                     <CardActions sx={{ pt: 0 }}>
                                                         <Tooltip title="View">
