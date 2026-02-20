@@ -418,7 +418,22 @@ const LiveStreaming = () => {
             ...prev,
             [id]: { ...prev[id], talking: false, micConnecting: false, micLevel: 0, muted: restoreMuted },
         }));
-    }, [cleanupTalkContext]);
+
+        // Tell backend to send 0x9101 dataType=0 to restore video+audio streaming.
+        // The device will switch from intercom mode back to normal video+audio.
+        // Video will briefly pause (~2-3s) while the device reconnects.
+        fetch(`/api/video/talk/${deviceId}/${id}/stop`, { method: 'POST' })
+            .then((resp) => {
+                if (resp.ok) {
+                    console.log(`Video restore command sent for CH${id}`);
+                } else {
+                    console.warn(`Failed to send video restore command for CH${id}: ${resp.status}`);
+                }
+            })
+            .catch((err) => {
+                console.warn(`Failed to send video restore command for CH${id}:`, err);
+            });
+    }, [deviceId, cleanupTalkContext]);
 
     // Start talk-back (microphone) — production-ready with AudioWorklet fallback, level monitoring, error handling
     const startTalking = useCallback(async (id) => {
